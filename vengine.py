@@ -97,7 +97,7 @@ def evaluate_out_type(tokens):
         for x in tokens:
             expr+=getdefaults(x)+" "
     except:
-        print("----------------------ERROR-----------------------")
+        exit("----------------------ERROR-----------------------")
     return type(eval(expr))
 
 def get_type_from_str(x: str):
@@ -119,8 +119,7 @@ def bracket_type(x):
 class token:
     def __init__(self,type,value):
         if type=="var" and value in ["fees","vars"]:
-            print("Cannot call or reference environment variables")
-            exit()
+            exit("Cannot call or reference environment variables")
         elif type=="sys" and value=="vars":
             value="(globals() | locals())"
         elif type=="sys" and value=="fees":
@@ -266,20 +265,16 @@ def tokeniser(script):
     return tokens+[token("eol",";")]
 
 def type_error(var1,type1,type2):
-    print(f"Cannot assign variable '{var1}' of type {type1} a value of type {type2}")
-    exit()
+    exit(f"Cannot assign variable '{var1}' of type {type1} a value of type {type2}")
 
 def list_type_error(var,type):
-    print(f"Cannot insert a value of type {type} in list '{var}'")
-    exit()
+    exit(f"Cannot insert a value of type {type} in list '{var}'")
 
 def undefined_error(var):
-    print(f"'{var}' was not defined")
-    exit()
+    exit(f"'{var}' was not defined")
 
 def not_support_assignment_error(var):
-    print(f"variable '{var}' does not support type assignment")
-    exit()
+    exit(f"variable '{var}' does not support type assignment")
 
 def validvar(var):
     if var in protected:
@@ -322,21 +317,17 @@ def jit(tokens,depth=False,infunc=False):
                 ignore.append(i+1)
             elif x.type=="sys" and x.value in ["str","float","int"] and validvar(tokens[i+1].value):
                 if (tokens[i+1].value in symbol_table):
-                    print(f"'{tokens[i+1].value}' has already been declared")
-                    exit()
+                    exit(f"'{tokens[i+1].value}' has already been declared")
                 if (tokens[i+1].type!="var"):
-                    print(f"Cannot declare token '{tokens[i+1].value}' of type {tokens[i+1].type}")
-                    exit()
+                    exit(f"Cannot declare token '{tokens[i+1].value}' of type {tokens[i+1].type}")
                 ignore.append(i+1)
                 if "[]" not in x.value:
                     symbol_table[tokens[i+1].value]=[str2type(x.value),None]
             elif x.type=="arr_init" and tokens[i+1].type=="var" and tokens[i+2].value==";" and tokens[i+1].value not in symbol_table and validvar(tokens[i+1].value):
                 if int(x.value.split(",")[1])>256:
-                    print("Array sizes cannot exceed 256")
-                    exit()
+                    exit("Array sizes cannot exceed 256")
                 if int(x.value.split(",")[1])<1:
-                    print("Array sizes cannot be less than 1")
-                    exit()
+                    exit("Array sizes cannot be less than 1")
                 symbol_table[tokens[i+1].value]=[type([]),f"{x.value}"]
                 ignore.append(i+1)
             elif x.type=="dict_init" and tokens[i+1].value not in symbol_table and validvar(tokens[i+1].value):
@@ -345,11 +336,9 @@ def jit(tokens,depth=False,infunc=False):
             elif x.type=="dict_call":
                 if x.value.split(",")[0] in symbol_table:
                     if symbol_table[x.value.split(",")[0]][0]!=type({}):
-                        print(f'Variable "{x.value.split(",")[0]}" is not a dictionary')
-                        exit()
+                        exit(f'Variable "{x.value.split(",")[0]}" is not a dictionary')
                     if str2type(symbol_table[x.value.split(",")[0]][1].split(",")[0])!=get_type_from_str(x.value.split(",")[1]):
-                        print(f'A type {get_type_from_str(x.value.split(",")[1])} lookup was performed on a dictionary "{x.value.split(",")[0]}" supporting lookup of only type  {symbol_table[x.value.split(",")[0]][1].split(",")[0]}')
-                        exit()
+                        exit(f'A type {get_type_from_str(x.value.split(",")[1])} lookup was performed on a dictionary "{x.value.split(",")[0]}" supporting lookup of only type  {symbol_table[x.value.split(",")[0]][1].split(",")[0]}')
                     if tokens[i+1].value=="=":
                         expr=""
                         ignorei=i+1
@@ -385,10 +374,9 @@ def jit(tokens,depth=False,infunc=False):
                     list_type_error(x.value.split(",")[0],x_type)
             elif x.value=="if":
                 if tokens[i+1].value!="(":
-                    print("IF statements require conditions inside of round brackets")
-                    exit()
+                    exit("IF statements require conditions inside of round brackets")
                 ignore.append(i+1)
-                ignorei=i+1
+                ignorei=i
                 expr_tokens=[]
                 brackets=0
                 for tk in tokens[i+1:]:
@@ -405,8 +393,6 @@ def jit(tokens,depth=False,infunc=False):
                         brackets-=1
                         continue
                     if brackets==0:
-                        ignorei+=1
-                        ignore.append(ignorei)
                         break
                     ignorei+=1
                     ignore.append(ignorei)
@@ -414,13 +400,11 @@ def jit(tokens,depth=False,infunc=False):
                 condition_tokens=expr_tokens
                 x_type=evaluate_out_type(expr_tokens)
                 if x_type!=type(True):
-                    print("IF statements require bool output as condition")
-                    exit()
+                    exit("IF statements require bool output as condition")
                 if tokens[i+1+len(expr_tokens)].value!="{":
-                    print("Code wrapped inside of IF statements are required to be inside curly brackets")
-                    exit()
-                ignore.append(i+1+len(expr_tokens))
-                ignorei=i+1+len(expr_tokens)
+                    exit("Code wrapped inside of IF statements are required to be inside curly brackets")
+                ignore.append(i+-1+len(expr_tokens))
+                ignorei=i+len(expr_tokens)
                 brackets=0
                 code_tokens=[]
                 for tkx in tokens[i+1+len(expr_tokens):]:
@@ -435,8 +419,6 @@ def jit(tokens,depth=False,infunc=False):
                         brackets-=1
                         continue
                     if brackets==0:
-                        ignorei+=1
-                        ignore.append(ignorei)
                         break
                     ignorei+=1
                     ignore.append(ignorei)
@@ -446,8 +428,7 @@ def jit(tokens,depth=False,infunc=False):
                 if_i+=1
             elif x.value=="function" and x.type=="sys" and tokens[i+1].type=="var" and tokens[i+1].value not in symbol_table and tokens[i+1].value not in funcs:
                 if tokens[i+2].value!="{":
-                    print("Code inside functions are required to be inside of curly brackets")
-                    exit()
+                    exit("Code inside functions are required to be inside of curly brackets")
                 ignore.append(i+1)
                 ignorei=i+1
                 expr_tokens=[]
@@ -477,11 +458,9 @@ def jit(tokens,depth=False,infunc=False):
                 funcs[tokens[i+1].value]=expr_tokens
             elif x.type=="exec":
                 if x.value not in funcs:
-                    print(f"function {x.value} has not been defined")
-                    exit()
+                    exit(f"function {x.value} has not been defined")
             else:
-                print("Token",x.value,"of type",x.type,"was not found to be ignored")
-                exit()
+                exit(f"Token {x.value} of type {x.type} was not found to be ignored")
     if_i=0
     cc_funcs=funcs
     cc_if_s=if_s
@@ -523,8 +502,7 @@ def compiler(tokens,jitcode,depth=False):
                 if isnum(x.value.split(',')[1]) or (x.value.split(',')[1] in jitcode["symbol_table"] and jitcode["symbol_table"][x.value.split(',')[1]][0]==type(1)):
                     x.value=f"{x.value.split(',')[0]}[{x.value.split(',')[1]}]"
                 else:
-                    print(f"Non Integer type property '{x.value.split(',')[1]}' was used to look up array")
-                    exit()
+                    exit(f"Non Integer type property '{x.value.split(',')[1]}' was used to look up array")
             elif x.type=="dict_call":
                 x.value=f"{x.value.split(',')[0]}[{x.value.split(',')[1]}]"
     ignore=[]
@@ -602,10 +580,13 @@ def compiler(tokens,jitcode,depth=False):
         compiled=""
     return cc_compiled
 
-def run(script):
-    script="int txamount;str txcurr;str txrecvr;"+script
+def run(script,debug=True):
+    script=("int txamount;str txcurr;str txrecvr;"+script).replace(";",";;")
     try:
         tokenz=tokeniser(script)
         return compiler(tokenz,jit(tokenz))
     except:
+        if debug:
+            import traceback
+            traceback.print_exc()
         return False
