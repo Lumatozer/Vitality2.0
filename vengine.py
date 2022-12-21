@@ -118,31 +118,42 @@ def bracket_type(x):
 
 class token:
     def __init__(self,type,value):
+        self.fees=0
         if type=="var" and value in ["fees","vars"]:
             exit("Cannot call or reference environment variables")
         elif type=="sys" and value=="vars":
+            self.fees+=10
             value="(globals() | locals())"
         elif type=="sys" and value=="fees":
+            self.fees+=1
             value=""
         elif type=="var" and "[" in value and "]" in value:
+            self.fees+=3
             if value.split("[")[0] in ["str","int","float"]:
+                self.fees+=2
                 type="arr_init"
             else:
+                self.fees+=1
                 type="arr_call"
             value=f'{value.split("[")[0]},{value.split("[")[1].split("]")[0]}'
         elif type=="var" and "{}" in value and value.split("{}")[0] in ["str","int"] and value.split("{}")[1] in ["str","int"]:
             type="dict_init"
+            self.fees+=5
             value=f'{value.split("{}")[0]},{value.split("{}")[1]}'
         elif type=="var" and "{" in value and "}" in value and "{}" not in value:
             type="dict_call"
+            self.fees+=4
             value=f"{value.split('{')[0]},{value.split('{')[1][:-1]}"
         elif value[-2:]=="()":
             type="exec"
+            self.fees+=3
             value=value[:-2]
         elif type=="var" and value[0]=="&":
+            self.fees+=10
             type="len"
         self.type=type
         self.value=value
+        self.fees+=len(self.type)+len(self.value)
 
 def tokeniser(script):
     global tokens,last_token,symbol_table
@@ -576,8 +587,9 @@ def compiler(tokens,jitcode,depth=False):
                 add_compile(f"{x.value}()")
     cc_compiled=compiled
     if not depth:
-        indents,func_i,if_i,=0,0,0
+        indents,func_i,if_i=0,0,0
         compiled=""
+        return cc_compiled,sum([x.fees for x in tokens])
     return cc_compiled
 
 def run(script,debug=True):
@@ -589,4 +601,4 @@ def run(script,debug=True):
         if debug:
             import traceback
             traceback.print_exc()
-        return False
+        return False,False

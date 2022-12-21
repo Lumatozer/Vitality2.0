@@ -7,7 +7,7 @@ import vengine
 code=vengine.run("""
 int x;
 """)
-print(code)
+print(code[0],"\nFees:",code[1])
 ```
 ## Basics
 To create a variable and assign a value to it
