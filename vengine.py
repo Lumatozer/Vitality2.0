@@ -596,6 +596,12 @@ def compiler(tokens,jitcode,depth=False):
     return cc_compiled
 
 def run(script,debug=True):
+    global symbol_table,if_s,if_i,funcs,compiled
+    symbol_table={"txcurr":(type(""),None),"txamount":(type(1.0),None),"txsender":(type(""),None),"txmsg":(type(""),None)}
+    if_s={}
+    funcs={}
+    if_i=0
+    compiled=""
     script=script.replace(";",";;")
     try:
         tokenz=tokeniser(script)
