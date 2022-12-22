@@ -1,13 +1,19 @@
 operators=["=","-","+","*","/","!","==","!=","not","in","or","and"]
 protected=["function","int","float","str","and","or","in","not","if","Dict","List","typing","vars","fees"]
 
-symbol_table={}
+symbol_table={"txcurr":(type(""),None),"txamount":(type(1.0),None),"txsender":(type(""),None),"txmsg":(type(""),None)}
 if_s={}
 funcs={}
 if_i=0
 compiled=""
 
-def isnum(check):
+def isnum(check,float_=False):
+    if float_:
+        try:
+            float(check)
+            return True
+        except:
+            return False
     try:
         int(check)
         return True
@@ -93,11 +99,11 @@ def str2type(x):
 
 def evaluate_out_type(tokens):
     expr=""
-    try:
-        for x in tokens:
+    for x in tokens:
+        try:
             expr+=getdefaults(x)+" "
-    except:
-        exit("----------------------ERROR-----------------------")
+        except:
+            exit("----------------------ERROR-----------------------")
     return type(eval(expr))
 
 def get_type_from_str(x: str):
@@ -181,7 +187,8 @@ def tokeniser(script):
                 cache=""
                 state=""
                 continue
-            elif cache!="":append_token(token("var",cache))
+            elif isnum(cache,float_=True):append_token(token("num",cache));state="";cache=""
+            elif cache!="":append_token(token("var",cache));state="";cache=""
             append_token(token(bracket_type(x),x))
             continue
         if x=="," and ["sys","var","","num"]:
@@ -273,7 +280,7 @@ def tokeniser(script):
             continue
         cache+=x
         state="sys"
-    return tokens+[token("eol",";")]
+    return tokens
 
 def type_error(var1,type1,type2):
     exit(f"Cannot assign variable '{var1}' of type {type1} a value of type {type2}")
@@ -302,10 +309,7 @@ def jit(tokens,depth=False,infunc=False):
     ignore=[]
     global symbol_table,if_s,funcs,if_i
     if "symbol_table" not in globals().keys():
-        symbol_table={}
-        if_s={}
-        funcs={}
-        if_i=0
+        symbol_table={"txcurr":(type(""),None),"txamount":(type(1.0),None),"txsender":(type(""),None),"txmsg":(type(""),None)}
     for x in tokens:
         i+=1
         if i not in ignore and x.value != ";":
@@ -387,56 +391,51 @@ def jit(tokens,depth=False,infunc=False):
                 if tokens[i+1].value!="(":
                     exit("IF statements require conditions inside of round brackets")
                 ignore.append(i+1)
-                ignorei=i
-                expr_tokens=[]
-                brackets=0
-                for tk in tokens[i+1:]:
-                    if tk.value=="(":
-                        ignorei+=1
-                        ignore.append(ignorei)
-                        expr_tokens.append(tk)
-                        brackets+=1
-                        continue
-                    if tk.value==")":
-                        ignorei+=1
-                        ignore.append(ignorei)
-                        expr_tokens.append(tk)
-                        brackets-=1
-                        continue
-                    if brackets==0:
-                        break
-                    ignorei+=1
-                    ignore.append(ignorei)
-                    expr_tokens.append(tk)
-                condition_tokens=expr_tokens
-                x_type=evaluate_out_type(expr_tokens)
-                if x_type!=type(True):
-                    exit("IF statements require bool output as condition")
-                if tokens[i+1+len(expr_tokens)].value!="{":
-                    exit("Code wrapped inside of IF statements are required to be inside curly brackets")
-                ignore.append(i+-1+len(expr_tokens))
-                ignorei=i+len(expr_tokens)
-                brackets=0
+                condition_tokens=[]
                 code_tokens=[]
-                for tkx in tokens[i+1+len(expr_tokens):]:
-                    if tkx.value=="{":
-                        ignorei+=1
-                        ignore.append(ignorei)
-                        brackets+=1
-                        continue
-                    if tkx.value=="}":
-                        ignorei+=1
-                        ignore.append(ignorei)
-                        brackets-=1
-                        continue
-                    if brackets==0:
-                        break
+                brackets=0
+                ignorei=i
+                for x in range(len(tokens)-i):
+                    x=tokens[x+i+1]
                     ignorei+=1
-                    ignore.append(ignorei)
-                    code_tokens.append(tkx)
-                jit(code_tokens,depth=True)
+                    if x.value=="(":
+                        ignore.append(ignorei)
+                        condition_tokens.append(x)
+                        brackets+=1
+                    elif x.value==")":
+                        ignore.append(ignorei)
+                        condition_tokens.append(x)
+                        brackets-=1
+                        if brackets==0:
+                            break
+                    else:
+                        ignore.append(ignorei)
+                        condition_tokens.append(x)
+                condition_eval=evaluate_out_type(condition_tokens)
+                if condition_eval!=type(True):
+                    exit("IF statements require bool output as condition")
+                if tokens[ignorei+1].value!="{":
+                    exit("Code wrapped inside of IF statements are required to be inside curly brackets")
+                for x in range(len(tokens)-ignorei):
+                    x=tokens[x+len(condition_tokens)+1]
+                    ignorei+=1
+                    if x.value=="{":
+                        ignore.append(ignorei)
+                        code_tokens.append(x)
+                        brackets+=1
+                    elif x.value=="}":
+                        ignore.append(ignorei)
+                        code_tokens.append(x)
+                        brackets-=1
+                        if brackets==0:
+                            break
+                    else:
+                        ignore.append(ignorei)
+                        code_tokens.append(x)
+                code_tokens=code_tokens[1:-1]
                 if_s[if_i]={"condition":condition_tokens,"code":code_tokens}
                 if_i+=1
+                jit(code_tokens,depth=True)
             elif x.value=="function" and x.type=="sys" and tokens[i+1].type=="var" and tokens[i+1].value not in symbol_table and tokens[i+1].value not in funcs:
                 if tokens[i+2].value!="{":
                     exit("Code inside functions are required to be inside of curly brackets")
@@ -472,14 +471,14 @@ def jit(tokens,depth=False,infunc=False):
                     exit(f"function {x.value} has not been defined")
             else:
                 exit(f"Token {x.value} of type {x.type} was not found to be ignored")
-    if_i=0
-    cc_funcs=funcs
-    cc_if_s=if_s
-    cc_symbol_table=symbol_table
     if not depth:
-        symbol_table={}
+        if_i=0
+        cc_funcs=funcs
+        cc_if_s=if_s
+        cc_symbol_table=symbol_table
+        symbol_table={"txcurr":(type(""),None),"txamount":(type(1.0),None),"txsender":(type(""),None),"txmsg":(type(""),None)}
         if_s,funcs,if_i=0,0,0
-    return {"funcs":cc_funcs,"ifs":cc_if_s,"symbol_table":cc_symbol_table}
+        return {"funcs":cc_funcs,"ifs":cc_if_s,"symbol_table":cc_symbol_table}
 
 def ignorerep(start,reps):
     out=[]
@@ -541,11 +540,15 @@ def compiler(tokens,jitcode,depth=False):
                 add_compile(f"globals()['{tokens[i+1].value}']=[{absolute_defaults(str2type(x.value.split(',')[0]))}]*{x.value.split(',')[1]}")
             elif x.value=="if":
                 if_i+=1
+                ignore+=ignorerep(i,len(jitcode["ifs"][if_i]['code'])+len(jitcode["ifs"][if_i]['condition'])+4)
                 add_compile("if "+token_to_expr(jitcode["ifs"][if_i]['condition'])+":")
                 indents+=1
+                pre_compile=compiled
                 compiler(jitcode["ifs"][if_i]['code'],jitcode,True)
+                if compiled==pre_compile:
+                    add_compile("pass")
                 indents-=1
-                ignore+=ignorerep(i,len(jitcode["ifs"][if_i]['code'])+len(jitcode["ifs"][if_i]['condition'])+4)
+                preig=ignore
             elif x.value=="function":
                 add_compile(f"def {tokens[i+1].value}():")
                 indents+=1
@@ -593,10 +596,11 @@ def compiler(tokens,jitcode,depth=False):
     return cc_compiled
 
 def run(script,debug=True):
-    script=("int txamount;str txcurr;str txrecvr;"+script).replace(";",";;")
+    script=script.replace(";",";;")
     try:
         tokenz=tokeniser(script)
-        return compiler(tokenz,jit(tokenz))
+        trip=jit(tokenz)
+        return compiler(tokenz,trip)
     except:
         if debug:
             import traceback
