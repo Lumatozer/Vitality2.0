@@ -1,7 +1,7 @@
 operators=["=","-","+","*","/","!","==","!=","not","in","or","and"]
 protected=["function","int","float","str","and","or","in","not","if","Dict","List","typing","vars","fees"]
 
-symbol_table={"txcurr":(type(""),None),"txamount":(type(1.0),None),"txsender":(type(""),None),"txmsg":(type(""),None)}
+symbol_table={"txcurr":(type(""),None),"txamount":(type(1.0),None),"txsender":(type(""),None),"txmsg":(type(""),None),"txto":(type(""),None)}
 if_s={}
 funcs={}
 if_i=0
@@ -309,7 +309,7 @@ def jit(tokens,depth=False,infunc=False):
     ignore=[]
     global symbol_table,if_s,funcs,if_i
     if "symbol_table" not in globals().keys():
-        symbol_table={"txcurr":(type(""),None),"txamount":(type(1.0),None),"txsender":(type(""),None),"txmsg":(type(""),None)}
+        symbol_table={"txcurr":(type(""),None),"txamount":(type(1.0),None),"txsender":(type(""),None),"txmsg":(type(""),None),"txto":(type(""),None)}
     for x in tokens:
         i+=1
         if i not in ignore and x.value != ";":
@@ -476,7 +476,7 @@ def jit(tokens,depth=False,infunc=False):
         cc_funcs=funcs
         cc_if_s=if_s
         cc_symbol_table=symbol_table
-        symbol_table={"txcurr":(type(""),None),"txamount":(type(1.0),None),"txsender":(type(""),None),"txmsg":(type(""),None)}
+        symbol_table={"txcurr":(type(""),None),"txamount":(type(1.0),None),"txsender":(type(""),None),"txmsg":(type(""),None),"txto":(type(""),None)}
         if_s,funcs,if_i=0,0,0
         return {"funcs":cc_funcs,"ifs":cc_if_s,"symbol_table":cc_symbol_table}
 
@@ -597,7 +597,7 @@ def compiler(tokens,jitcode,depth=False):
 
 def run(script,debug=True):
     global symbol_table,if_s,if_i,funcs,compiled
-    symbol_table={"txcurr":(type(""),None),"txamount":(type(1.0),None),"txsender":(type(""),None),"txmsg":(type(""),None)}
+    symbol_table={"txcurr":(type(""),None),"txamount":(type(1.0),None),"txsender":(type(""),None),"txmsg":(type(""),None),"txto":(type(""),None)}
     if_s={}
     funcs={}
     if_i=0
