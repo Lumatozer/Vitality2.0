@@ -73,6 +73,8 @@ def getdefaults(tkn):
     if tkn.value in ["[","]",",",":","{","}","(",")"]:
         return tkn.value
     if tkn.type=="num":
+        if isnum(tkn.value,float_=True):
+            return "1.0"
         return "1"
     if tkn.type=="str":
         return "''"
