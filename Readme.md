@@ -123,7 +123,9 @@ if (txamount > 1) {
 # Examples
 1. Domain based tx forwarding
 ```python
-str{}str domains;
+if ('domains' not in vars) {
+    str{}str domains;
+};
 if (txmsg not in domains) {
     domains{txsender}=txmsg;
     txto='';
