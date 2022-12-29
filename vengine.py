@@ -1,616 +1,533 @@
-operators=["=","-","+","*","/","!","==","!=","not","in","or","and"]
-protected=["function","int","float","str","and","or","in","not","if","Dict","List","typing","vars","fees"]
+cache=""
+state=""
 
-symbol_table={"txcurr":(type(""),None),"txamount":(type(1.0),None),"txsender":(type(""),None),"txmsg":(type(""),None),"txto":(type(""),None)}
-if_s={}
-funcs={}
-if_i=0
-compiled=""
+def valid_var_name(name):
+    if len(name)<1:
+        return False
+    if name in reserved:return False
+    whitelist="abcdefghijklmnopqrstuvwxyz"
+    for x in name:
+        if x not in whitelist:
+            return False
+    return True
 
-def isnum(check,float_=False):
-    if float_:
+def isnum(data):
+    if data==".": return True
+    else:
         try:
-            float(check)
+            float(data)
             return True
         except:
             return False
-    try:
-        int(check)
-        return True
-    except:
-        return False
 
-def getsystype(x):
-    if x=="[" or x=="]":
-        return "arr_bracket"
-    if x=="(" or x==")":
-        return "bracket"
-    if x=="{" or x=="}":
-        return "dict_bracket"
-    if x in operators:
-        return "operators"
-    if x in protected:
-        return "sys"
-    if x==":":
-        return "colon"
-    if x==",":
-        return "comma"
-    if x==";":
-        return "eol"
-    return "sys"
+def error(errordata):
+    exit(errordata)
 
-def absolute_defaults(vartype):
-    if vartype==type(1):
-        return 1
-    if vartype==type(1.0):
-        return 1.0
-    if vartype==type(""):
-        return "''"
-    if vartype==type({}):
-        return {}
-    if vartype==type([]):
-        return []
-
-def gettypedefaults(vartype):
-    if vartype==type(1):
-        return "1"
-    if vartype==type(1.0):
-        return "1.0"
-    if vartype==type(""):
-        return "''"
-    if vartype==type([]):
-        return "[0]"
-    if vartype==type({}):
-        return "{}"
-
-def getdefaults(tkn):
-    if tkn.type=="sys" and tkn.value=="(globals() | locals())":
-        return "{}"
-    if tkn.value in operators:
-        return tkn.value
-    if tkn.type=="sys":
-        return ""
-    if tkn.value in ["[","]",",",":","{","}","(",")"]:
-        return tkn.value
-    if tkn.type=="num":
-        if isnum(tkn.value,float_=True):
-            return "1.0"
-        return "1"
-    if tkn.type=="str":
-        return "''"
-    if tkn.type=="var":
-        return gettypedefaults(symbol_table[tkn.value][0])
-    if tkn.type=="len":
-        return "1"
-    if tkn.type=="arr_call":
-        return gettypedefaults(str2type(symbol_table[tkn.value.split(",")[0]][1].split(",")[0]))
-    if tkn.type=="dict_call":
-        return gettypedefaults(str2type(symbol_table[tkn.value.split(",")[0]][1].split(",")[1]))
-
-def str2type(x):
-    if x=="str":
-        return type("")
-    if x=="int":
-        return type(1)
-    if x=="float":
-        return type(1.0)
-    if x=="dict":
-        return type({})
-    if x=="arr":
-        return type([])
-
-def evaluate_out_type(tokens):
-    expr=""
-    for x in tokens:
-        try:
-            expr+=getdefaults(x)+" "
-        except:
-            exit("----------------------ERROR-----------------------")
-    return type(eval(expr))
-
-def get_type_from_str(x: str):
-    try:
-        import json
-        x_type=json.loads(x)
-        return type(x_type)
-    except:
-        return type(x)
-
-def bracket_type(x):
-    if x in "()":
-        return "bracket"
-    if x in "{}":
-        return "dict_bracket"
-    if x in "[]":
-        return "arr_bracket"
+special_data_types=["num[]","str[]","num{}str","str{}num","str{}str","num{}num"]
+var_init_normal=["num","str"]
+reserved=["num","str","struct","function","for","if","while","num[]","str[]","num{}str","str{}num","str{}str","num{}num","spawn","HALT","BREAK","true","false","append","remove"]
+operators=["+","=","-","/","!","not","in",">","<","and"]
+no_space_operators=["+","=","-","/","!",">","<"]
+brackets="()[]{}"
 
 class token:
     def __init__(self,type,value):
-        self.fees=0
-        if type=="var" and value in ["fees","vars"]:
-            exit("Cannot call or reference environment variables")
-        elif type=="sys" and value=="vars":
-            self.fees+=10
-            value="(globals() | locals())"
-        elif type=="sys" and value=="fees":
-            self.fees+=1
-            value=""
-        elif type=="var" and "[" in value and "]" in value:
-            self.fees+=3
-            if value.split("[")[0] in ["str","int","float"]:
-                self.fees+=2
-                type="arr_init"
-            else:
-                self.fees+=1
-                type="arr_call"
-            value=f'{value.split("[")[0]},{value.split("[")[1].split("]")[0]}'
-        elif type=="var" and "{}" in value and value.split("{}")[0] in ["str","int"] and value.split("{}")[1] in ["str","int"]:
-            type="dict_init"
-            self.fees+=5
-            value=f'{value.split("{}")[0]},{value.split("{}")[1]}'
-        elif type=="var" and "{" in value and "}" in value and "{}" not in value:
-            type="dict_call"
-            self.fees+=4
-            value=f"{value.split('{')[0]},{value.split('{')[1][:-1]}"
-        elif value[-2:]=="()":
-            type="exec"
-            self.fees+=3
-            value=value[:-2]
-        elif type=="var" and value[0]=="&":
-            self.fees+=10
-            type="len"
         self.type=type
         self.value=value
-        self.fees+=len(self.type)+len(self.value)
+    def __repr__(self) -> str:
+        return f"['{self.type}' : '{self.value}'] "
+
+def get_type_from_str(typestr):
+    if typestr=="num":
+        return type(1.0)
+    if typestr=="str":
+        return type("")
+
+def get_type_defaults(ttype,raw=False):
+    if ttype==type(1.0):
+        if raw:
+            return 1.0
+        return "1.0"
+    if ttype==type(""):
+        if raw:
+            return ""
+        return "''"
+
+def bracket_type(data):
+    if data in "()":
+        return "round_bracket"
+    if data in "[]":
+        return "square_bracket"
+    if data in "{}":
+        return "curly_bracket"
+
+def opp_bracket(bracket):
+    exchange = {0: 1, 1:0}
+    if bracket in "()":
+        return "()"[exchange["()".index(bracket)]]
+    if bracket in "{}":
+        return "{}"[exchange["{}".index(bracket)]]
+    if bracket in "[]":
+        return "[]"[exchange["[]".index(bracket)]]
+
+def get_type_from_literal(data):
+        if data[0]=="'" and data[-1]=="'":
+            return 'str'
+        if isnum(data):
+            return 'num'
+        if valid_var_name(data):
+            return 'var'
+
+def cache_handler():
+    global state,cache
+    if cache!="" and state!="" and cache.replace(" ","")!="":
+        if state=="sys":
+            if cache not in reserved:
+                if "." in cache:
+                    state="nested_var"
+                else:state="var"
+            if cache in operators:
+                state="operator"
+            if cache in special_data_types:
+                if cache[-2:]=="[]" and cache[:-2] in ["str","num"]:
+                    state="arr_init"
+                    cache=cache[:-2]
+                elif "{}" in cache:
+                    splitcheck=cache.split("{}")
+                    if len(splitcheck)==2 and splitcheck[0] in ["str","num"] and splitcheck[1] in ["str","num"]:
+                        state="dict_init"
+                        cache=[cache.split("{}")[0],cache.split("{}")[1]]
+        if state=="var":
+            if cache[-1:]=="]" and len(cache.split("["))==2 and len(cache.split("]"))==2 and get_type_from_literal(cache.split("[")[1].split("]")[0])!=None:
+                state="lookup"
+                cache=[cache.split("[")[0],cache.split("[")[1].split("]")[0]]
+            elif cache[-2:]=="()":
+                state="call"
+                cache=cache.replace("()","")
+        tokens.append(token(state,cache))
+    state=""
+    cache=""
 
 def tokeniser(script):
-    global tokens,last_token,symbol_table
+    global state,cache,tokens
     tokens=[]
-    last_token=token("","")
-    cache=""
-    state=""
-    def append_token(tkn):
-        global last_token,symbol_table,tokens
-        last_token=tkn
-        tokens.append(last_token)
-    for x in script.replace("\n",""):
-        if (state=="sys" and x in ["(",")","'"]+operators and cache in protected):
-            state=""
-            append_token(token(getsystype(cache),cache))
-            if x in "(){}[]":
-                append_token(token(bracket_type(x),x))
-            cache=""
-            continue
-        if x==" " and state=="" and cache=="":
-            continue
-        if x in "(){}[]" and state in ["var","","num"]:
-            if cache in protected:
-                append_token(token("sys",cache))
-                cache=""
-                state=""
-                continue
-            elif isnum(cache,float_=True):append_token(token("num",cache));state="";cache=""
-            elif cache!="":append_token(token("var",cache));state="";cache=""
-            append_token(token(bracket_type(x),x))
-            continue
-        if x=="," and ["sys","var","","num"]:
-            if cache!="" and state in ["str","num"]:
-                append_token(token(state,cache))
-                cache=""
-                state=""
-            append_token(token("comma",x))
-            continue
-        if x==":" and["sys","var","","num"]:
-            if cache!="" and state in ["str","num"]:
-                append_token(token(state,cache))
-                cache=""
-                state=""
-            append_token(token("colon",x))
-            continue
-        if x in operators and state in ["","sys"]:
-            if cache!="":
-                if cache in protected:
-                    append_token(token("sys",cache))
-                    cache=""
-                    state=""
-                    continue
-                else:
-                    append_token(token("var",cache))
-                    cache=""
-                    state=""
-            if x=="=" and last_token.value=="=":
-                del tokens[len(tokens)-1]
-                append_token(token("operator","=="))
-                continue
-            if x=="=" and last_token.value=="!":
-                del tokens[len(tokens)-1]
-                append_token(token("operator","!="))
-                continue
-            append_token(token("operator",x))
-            continue
-        if x=="'" and state=="":
-            state="str"
-            continue
-        if x=="'" and state=="str":
-            state=""
-            append_token(token("str","'"+cache+"'"))
-            cache=""
-            continue
-        if state=="str":
-            cache+=x
-            continue
-        if isnum(x) and state=="":
+    for x in script.replace("\n"," ")+" ":
+        if isnum(x) and state in [""]:
+            cache_handler()
             state="num"
             cache+=x
-            continue
-        if (isnum(x) or x==".") and state=="num":
-            cache+=x
-            continue
-        if state=="num" and not isnum(x):
-            append_token(token("num",cache))
-            append_token(token(getsystype(x),x))
-            cache=""
-            state=""
-            continue
-        if x==" " and state=="num":
-            append_token(token("num",cache))
-            cache=""
-            state=""
-            continue
-        if x==" " and (state=="" or state=="sys"):
-            if cache in protected:
-                append_token(token("sys",cache))
-                cache=""
-                state=""
-                continue
-            append_token(token("var",cache))
-            cache=""
-            state=""
-            continue
-        if x==";" and state!="str":
-            if cache!="":
-                if cache in protected:
-                    append_token(token("sys",cache))
-                    cache=""
-                    state=""
-                    continue
-                else:
-                    append_token(token("var",cache))
-                    cache=""
-                    state=""
-            append_token(token("eol",";"))
-            continue
-        cache+=x
-        state="sys"
-    return tokens
-
-def type_error(var1,type1,type2):
-    exit(f"Cannot assign variable '{var1}' of type {type1} a value of type {type2}")
-
-def list_type_error(var,type):
-    exit(f"Cannot insert a value of type {type} in list '{var}'")
-
-def undefined_error(var):
-    exit(f"'{var}' was not defined")
-
-def not_support_assignment_error(var):
-    exit(f"variable '{var}' does not support type assignment")
-
-def validvar(var):
-    if var in protected:
-        return False
-    whitelist="abcdefghijklmnopqrstuvwxyz"
-    whitelist+=whitelist.upper()
-    whitelist+="1234567890_"
-    for x in var:
-        if x not in whitelist: return False
-    return True
-
-def jit(tokens,depth=False,infunc=False):
-    i=-1
-    ignore=[]
-    global symbol_table,if_s,funcs,if_i
-    if "symbol_table" not in globals().keys():
-        symbol_table={"txcurr":(type(""),None),"txamount":(type(1.0),None),"txsender":(type(""),None),"txmsg":(type(""),None),"txto":(type(""),None)}
-    for x in tokens:
-        i+=1
-        if i not in ignore and x.value != ";":
-            if x.type=="var" and tokens[i+1].value=="=":
-                if x.value not in symbol_table:
-                    undefined_error(x.value)
-                expr=""
-                ignorei=i+1
-                expr_tokens=[]
-                for tk in tokens[i+2:]:
-                    if tk.value==";":
-                        break
-                    ignorei+=1
-                    ignore.append(ignorei)
-                    expr_tokens.append(tk)
-                    expr+=(tk.value+" ")
-                x_type=evaluate_out_type(expr_tokens)
-                if symbol_table[x.value][0]!=x_type:
-                    type_error(x.value,symbol_table[x.value][0],x_type)
-                ignore.append(i+1)
-            elif x.type=="sys" and x.value in ["str","float","int"] and validvar(tokens[i+1].value):
-                if (tokens[i+1].value in symbol_table):
-                    exit(f"'{tokens[i+1].value}' has already been declared")
-                if (tokens[i+1].type!="var"):
-                    exit(f"Cannot declare token '{tokens[i+1].value}' of type {tokens[i+1].type}")
-                ignore.append(i+1)
-                if "[]" not in x.value:
-                    symbol_table[tokens[i+1].value]=[str2type(x.value),None]
-            elif x.type=="arr_init" and tokens[i+1].type=="var" and tokens[i+2].value==";" and tokens[i+1].value not in symbol_table and validvar(tokens[i+1].value):
-                if int(x.value.split(",")[1])>256:
-                    exit("Array sizes cannot exceed 256")
-                if int(x.value.split(",")[1])<1:
-                    exit("Array sizes cannot be less than 1")
-                symbol_table[tokens[i+1].value]=[type([]),f"{x.value}"]
-                ignore.append(i+1)
-            elif x.type=="dict_init" and tokens[i+1].value not in symbol_table and validvar(tokens[i+1].value):
-                ignore.append(i+1)
-                symbol_table[tokens[i+1].value]=[type({}),x.value]
-            elif x.type=="dict_call":
-                if x.value.split(",")[0] in symbol_table:
-                    if symbol_table[x.value.split(",")[0]][0]!=type({}):
-                        exit(f'Variable "{x.value.split(",")[0]}" is not a dictionary')
-                    if str2type(symbol_table[x.value.split(",")[0]][1].split(",")[0])!=get_type_from_str(x.value.split(",")[1]):
-                        exit(f'A type {get_type_from_str(x.value.split(",")[1])} lookup was performed on a dictionary "{x.value.split(",")[0]}" supporting lookup of only type  {symbol_table[x.value.split(",")[0]][1].split(",")[0]}')
-                    if tokens[i+1].value=="=":
-                        expr=""
-                        ignorei=i+1
-                        expr_tokens=[]
-                        for tk in tokens[i+2:]:
-                            if tk.value==";":
-                                break
-                            ignorei+=1
-                            ignore.append(ignorei)
-                            expr_tokens.append(tk)
-                            expr+=(tk.value+" ")
-                        if evaluate_out_type(expr_tokens)==str2type(symbol_table[x.value.split(",")[0]][1].split(",")[1]):
-                            ignore.append(i+1)
-                            continue
-            elif x.type=="arr_call" and tokens[i+1].value=="=":
-                ignore.append(i+1)
-                if x.value.split(",")[0] not in symbol_table:
-                    undefined_error(x.value.split(",")[0])
-                if symbol_table[x.value.split(",")[0]][0]!=type([]):
-                    not_support_assignment_error(x.value.split(",")[0])
-                expr=""
-                ignorei=i+1
-                expr_tokens=[]
-                for tk in tokens[i+2:]:
-                    if tk.value==";":
-                        break
-                    ignorei+=1
-                    ignore.append(ignorei)
-                    expr_tokens.append(tk)
-                    expr+=(tk.value+" ")
-                x_type=evaluate_out_type(expr_tokens)
-                if x_type!=str2type(symbol_table[x.value.split(",")[0]][1].split(",")[0]):
-                    list_type_error(x.value.split(",")[0],x_type)
-            elif x.value=="if":
-                if tokens[i+1].value!="(":
-                    exit("IF statements require conditions inside of round brackets")
-                ignore.append(i+1)
-                condition_tokens=[]
-                code_tokens=[]
-                brackets=0
-                ignorei=i
-                for x in range(len(tokens)-i):
-                    x=tokens[x+i+1]
-                    ignorei+=1
-                    if x.value=="(":
-                        ignore.append(ignorei)
-                        condition_tokens.append(x)
-                        brackets+=1
-                    elif x.value==")":
-                        ignore.append(ignorei)
-                        condition_tokens.append(x)
-                        brackets-=1
-                        if brackets==0:
-                            break
-                    else:
-                        ignore.append(ignorei)
-                        condition_tokens.append(x)
-                condition_eval=evaluate_out_type(condition_tokens)
-                if condition_eval!=type(True):
-                    exit("IF statements require bool output as condition")
-                if tokens[ignorei+1].value!="{":
-                    exit("Code wrapped inside of IF statements are required to be inside curly brackets")
-                for x in range(len(tokens)-ignorei):
-                    x=tokens[x+len(condition_tokens)+1]
-                    ignorei+=1
-                    if x.value=="{":
-                        ignore.append(ignorei)
-                        code_tokens.append(x)
-                        brackets+=1
-                    elif x.value=="}":
-                        ignore.append(ignorei)
-                        code_tokens.append(x)
-                        brackets-=1
-                        if brackets==0:
-                            break
-                    else:
-                        ignore.append(ignorei)
-                        code_tokens.append(x)
-                code_tokens=code_tokens[1:-1]
-                if_s[if_i]={"condition":condition_tokens,"code":code_tokens}
-                if_i+=1
-                jit(code_tokens,depth=True)
-            elif x.value=="function" and x.type=="sys" and tokens[i+1].type=="var" and tokens[i+1].value not in symbol_table and tokens[i+1].value not in funcs:
-                if tokens[i+2].value!="{":
-                    exit("Code inside functions are required to be inside of curly brackets")
-                ignore.append(i+1)
-                ignorei=i+1
-                expr_tokens=[]
-                brackets=0
-                for tku in tokens[i+2:]:
-                    if tku.value=="{":
-                        brackets+=1
-                        ignorei+=1
-                        ignore.append(ignorei)
-                        expr_tokens.append(tku)
-                        continue
-                    if tku.value=="}":
-                        brackets-=1
-                        ignorei+=1
-                        ignore.append(ignorei)
-                        expr_tokens.append(tku)
-                        continue
-                    if brackets==0:
-                        ignorei+=1
-                        ignore.append(ignorei)
-                        break
-                    ignorei+=1
-                    ignore.append(ignorei)
-                    expr_tokens.append(tku)
-                expr_tokens=expr_tokens[1:-1]
-                jit(expr_tokens,depth=True,infunc=True)
-                funcs[tokens[i+1].value]=expr_tokens
-            elif x.type=="exec":
-                if x.value not in funcs:
-                    exit(f"function {x.value} has not been defined")
+        elif x=="," and state in ["","sys","num"]:
+            cache_handler()
+            tokens.append(token("comma",x))
+        elif x==":" and state in ["","sys","num"]:
+            cache_handler()
+            tokens.append(token("colon",x))
+        elif x==";" and state in ["","sys","num"]:
+            cache_handler()
+            tokens.append(token("eol",x))
+        elif x in brackets and state in ["","num","sys"]:
+            if x in "({[" and state=="sys":
+                cache+=x
+            elif x in ")}]" and state=="sys" and opp_bracket(x) in cache:
+                cache+=x
             else:
-                exit(f"Token {x.value} of type {x.type} was not found to be ignored")
-    if not depth:
-        if_i=0
-        cc_funcs=funcs
-        cc_if_s=if_s
-        cc_symbol_table=symbol_table
-        symbol_table={"txcurr":(type(""),None),"txamount":(type(1.0),None),"txsender":(type(""),None),"txmsg":(type(""),None),"txto":(type(""),None)}
-        if_s,funcs,if_i=0,0,0
-        return {"funcs":cc_funcs,"ifs":cc_if_s,"symbol_table":cc_symbol_table}
+                cache_handler()
+                tokens.append(token(bracket_type(x),x))
+        elif x in operators and state in ["","sys","num"]:
+            cache_handler()
+            tokens.append(token("operator",x))
+        elif state=="num" and not isnum(x):
+            state=""
+            tokens.append(token("num",cache))
+            cache=""
+        elif x=="'" and state in [""]:
+            cache_handler()
+            cache+=x
+            state="str"
+        elif x=="'" and state=="str":
+            cache+=x
+            state=""
+            tokens.append(token("str",cache))
+            cache=""
+        elif x==" " and cache!="" and state not in ["str"]:
+            cache_handler()
+        elif x==" " and cache=="" and state=="":
+            pass
+        elif not isnum(x) and state in [""] and cache=="":
+            state="sys"
+            cache+=x
+        else:
+            cache+=x
+    cc_tokens=tokens
+    tokens=[];cache="";state=""
+    return cc_tokens
 
-def ignorerep(start,reps):
+def array_split(arr,elem):
     out=[]
-    for x in range(reps):
-        out.append(start+x+1)
+    temp=[]
+    for x in arr:
+        if x.value!=elem.value and x.type!=elem.value:
+            temp.append(x)
+        elif x.value==elem.value and x.type==elem.type:
+            out.append(temp)
+            temp=[]
+    if temp!=[]:
+        out.append(temp)
     return out
 
-def token_to_expr(tokens):
+def get_arg_tokens(tokens,ignorei,wrapper=[False,False],onchar=[False,False]):
+    out=[]
+    ignore=[]
+    if wrapper[0]:
+        brs=0
+        for x in tokens:
+            if x.value==wrapper[1]:
+                brs+=1
+            elif x.value==opp_bracket(wrapper[1]):
+                brs-=1
+            elif brs==0:
+                out=out[1:-1]
+                break
+            ignorei+=1
+            ignore.append(ignorei)
+            out.append(x)
+    elif onchar[0]:
+        for x in tokens:
+            ignorei+=1
+            ignore.append(ignorei)
+            if x.value==onchar[1]:
+                break
+            out.append(x)
+    return out,ignore
+
+def eval_out_type(tokens,expected):
     expr=""
     for x in tokens:
-        expr+=(x.value+" ")
-    return expr
+        if x.value in ["true","false"]:
+            expr+=" True "
+        elif x.type=="str":
+            expr+=" '' "
+        elif x.type=="num":
+            expr+=" 1.0 "
+        elif x.type=="operator":
+            if x.value in no_space_operators:
+                expr+=x.value
+            else:
+                expr+=f" {x.value} "
+        elif x.type=="nested_var":
+            x=x.value.split(".")
+            try:
+                expr+=f' {get_type_defaults(type(eval(f"symbol_table[x[0]].{x[1]}")))} '
+            except:
+                return False
+        elif x.type=="lookup":
+            x=x.value
+            if x[0] not in symbol_table or symbol_table[x[0]][0] not in [type([]),type({})]:return False
+            if symbol_table[x[0]][0]==type([]):
+                if get_type_from_str(get_type_from_literal(x[1]))!=type(1.0):return False
+                expr+=f" {get_type_defaults(symbol_table[x[0]][1])} "
+            elif symbol_table[x[0]][0]==type({}):
+                if get_type_from_str(get_type_from_literal(x[1]))!=symbol_table[x[0]][1]:return False
+                expr+=f" {get_type_defaults(symbol_table[x[0]][2])} "
+        elif x.type=="var":
+            if x.value not in symbol_table:return False
+            expr+=f" {get_type_defaults(symbol_table[x.value][0])} "
+        elif "bracket" in x.type:
+            expr+=f" {x.value} "
+        else:
+            return False
+    return type(eval(expr,{'__builtins__':""},{'__builtins__':""}))==expected
 
-def compiler(tokens,jitcode,depth=False):
-    global indents,func_i,if_i,compiled
-    if "indents" not in globals().keys():
-        indents=0
-        func_i=-1
-        if_i=-1
-        compiled=""
-    def add_compile(code):
-        global compiled
-        compiled+=(("    "*indents)+code+"\n")
-    if not depth:
-        i=-1
-        for x in tokens:
-            i+=1
-            if x.value[0]=="&":
-                x.value=f"len({x.value[1:]})"
-            elif x.type=="arr_call":
-                if isnum(x.value.split(',')[1]) or (x.value.split(',')[1] in jitcode["symbol_table"] and jitcode["symbol_table"][x.value.split(',')[1]][0]==type(1)):
-                    x.value=f"{x.value.split(',')[0]}[{x.value.split(',')[1]}]"
-                else:
-                    exit(f"Non Integer type property '{x.value.split(',')[1]}' was used to look up array")
-            elif x.type=="dict_call":
-                x.value=f"{x.value.split(',')[0]}[{x.value.split(',')[1]}]"
-    ignore=[]
+def jit(tokens,depth=False,infunc=False,inloop=False):
+    global symbol_table
+    if "symbol_table" not in globals():
+        symbol_table={"if_i":-1,"if_s":{},"txsender":[type("")],"txamount":[type(1.0)],"txcurr":[type("")],"txmsg":[type([]),type("")],"whiles_":{},"whiles_i":-1,"funcs_":{},"txto":[type("")]}
     i=-1
+    ignore=[]
     for x in tokens:
         i+=1
-        if i not in ignore and x.value!=";":
-            if x.type=="sys" and x.value in ["str","int","float","arr","dict"]:
-                add_compile(f"globals()['{tokens[i+1].value}']={absolute_defaults(str2type(x.value))}")
+        if x.value!=";" and i not in ignore:
+            if x.type=="sys" and x.value in var_init_normal:
+                if x.value in symbol_table:error(f"Variable {x.value} has been already declared with type {symbol_table[x.value][0]}")
+                if not valid_var_name(tokens[i+1].value):error(f"Invalid variable name {tokens[i+1].value}")
+                symbol_table[tokens[i+1].value]=[get_type_from_str(x.value),get_type_defaults(get_type_from_str(x.value),raw=1)]
                 ignore.append(i+1)
             elif x.type=="var" and tokens[i+1].value=="=":
-                expr=""
-                ignorei=i+1
-                expr_tokens=[]
-                for tk in tokens[i+2:]:
-                    if tk.value==";":
-                        break
-                    ignorei+=1
-                    ignore.append(ignorei)
-                    expr_tokens.append(tk)
-                    expr+=(tk.value+" ")
+                if x.value not in symbol_table:error(f"Variable {x.value} is not defined.")
+                arg_res=get_arg_tokens(tokens[i+2:],i+1,onchar=[True,";"])
+                ignore+=arg_res[1]
+                if eval_out_type(arg_res[0],symbol_table[x.value][0]):
+                    pass
+                else:
+                    error(f"Invalid type assignment to variable {x.value}")
                 ignore.append(i+1)
-                add_compile(f"globals()['{x.value}']={expr}")
             elif x.type=="arr_init":
-                add_compile(f"globals()['{tokens[i+1].value}']=[{absolute_defaults(str2type(x.value.split(',')[0]))}]*{x.value.split(',')[1]}")
-            elif x.value=="if":
-                if_i+=1
-                ignore+=ignorerep(i,len(jitcode["ifs"][if_i]['code'])+len(jitcode["ifs"][if_i]['condition'])+4)
-                add_compile("if "+token_to_expr(jitcode["ifs"][if_i]['condition'])+":")
-                indents+=1
-                pre_compile=compiled
-                compiler(jitcode["ifs"][if_i]['code'],jitcode,True)
-                if compiled==pre_compile:
-                    add_compile("pass")
-                indents-=1
-                preig=ignore
-            elif x.value=="function":
-                add_compile(f"def {tokens[i+1].value}():")
-                indents+=1
-                pre_compile=compiled
-                compiler(jitcode["funcs"][tokens[i+1].value],jitcode,True)
-                if compiled==pre_compile:
-                    add_compile("pass")
-                indents-=1
-                add_compile(f"globals()['{tokens[i+1].value}']={tokens[i+1].value}")
-                ignore+=ignorerep(i,len(jitcode["funcs"][tokens[i+1].value])+2)
-            elif x.type=="arr_call":
+                if x.value in symbol_table:error(f"Variable {x.value} has been already declared with type {symbol_table[x.value][0]}")
+                if not valid_var_name(tokens[i+1].value):error(f"Invalid variable name {tokens[i+1].value}")
+                symbol_table[tokens[i+1].value]=[type([]),get_type_from_str(x.value)]
                 ignore.append(i+1)
-                expr=""
-                ignorei=i+1
-                expr_tokens=[]
-                for tk in tokens[i+2:]:
-                    if tk.value==";":
-                        break
-                    ignorei+=1
-                    ignore.append(ignorei)
-                    expr_tokens.append(tk)
-                    expr+=(tk.value+" ")
-                add_compile(f"globals()['{x.value.split(',')[0]}'][{x.value.split(',')[1]}]={expr}")
+            elif x.type=="dict_init":
+                if tokens[i+1].value in symbol_table:error(f"Variable {tokens[i+1].value} has been already declared with type {symbol_table[x.value][0]}")
+                if not valid_var_name(tokens[i+1].value):error(f"Invalid variable name {tokens[i+1].value}")
+                symbol_table[tokens[i+1].value]=[type({}),get_type_from_str(x.value[0]),get_type_from_str(x.value[1])]
+                ignore.append(i+1)
+            elif x.value=="struct":
+                if x.value in symbol_table:error(f"Variable {x.value} has been already declared with type {symbol_table[x.value][0]}")
+                if not valid_var_name(tokens[i+1].value):error(f"Invalid variable name {tokens[i+1].value}")
+                arg_res=get_arg_tokens(tokens[i+2:],i+1,wrapper=[True,"{"])
+                ignore+=arg_res[1]
+                struct_vars=array_split(arg_res[0],token("comma",","))
+                struct_vars_define={}
+                for x in struct_vars:
+                    if len(x)!=3:error(f"Invalid struct declaration {' '.join([xy.value for xy in x])}")
+                    if x[0].value not in ["num","str"]:error(f"Invalid variable type for class {tokens[i+1].value}")
+                    if not valid_var_name(x[2].value):error(f"Invalid variable name {x[2].value}")
+                    if x[1].value!=":":error(f"Invalid declaration method for class {tokens[i+1].value}")
+                    struct_vars_define[x[2].value]=get_type_defaults(get_type_from_str(x[0].value))
+                ex_locals={"__builtins__":{'__build_class__':__build_class__,"__name__":__name__}}
+                ex_globals=ex_locals.copy()
+                exec(f"class {tokens[i+1].value}:\n    def __init__(self):"+"".join([f"\n        self.{x}={struct_vars_define[x]}" for x in struct_vars_define.keys()]),ex_globals,ex_locals)
+                symbol_table[tokens[i+1].value]=ex_locals[tokens[i+1].value]
+                ignore.append(i+1)
+            elif x.value=="spawn":
+                if tokens[i+1].value[0] not in symbol_table:error(f"Class {tokens[i+1].value[0]} is not defined")
+                if f"<class 'vengine.{tokens[i+1].value[0]}'>"!=str(symbol_table[tokens[i+1].value[0]]):error(f"Illegal object spawning of potential class {tokens[i+1].value[0]}")
+                if not valid_var_name(tokens[i+1].value[1]):error(f"Invalid variable name {tokens[i+1].value[1]}")
+                symbol_table[tokens[i+1].value[1]]=symbol_table[tokens[i+1].value[0]]()
+                ignore.append(i+1)
+            elif x.type=="nested_var" and len(x.value.split("."))==2:
+                x=x.value.split(".")
+                if x[0] not in symbol_table:error(f"Undefined object reference found '{x[0]}'")
+                if not valid_var_name(x[1]):error(f"Invalid variable name {x[1]}")
+                if x[1] not in dir(symbol_table[x[0]]):error(f"Invalid object variable '{x[1]}' of object '{x[0]}'")
+                arg_res=get_arg_tokens(tokens[i+2:],i+1,onchar=[True,";"])
+                ignore+=arg_res[1]
+                print(type(eval(f"symbol_table[x[0]].{x[1]}")))
+                if eval_out_type(arg_res[0],type(eval(f"symbol_table[x[0]].{x[1]}"))):
+                    pass
+                else:
+                    error(f"Invalid type assignment to variable '{x[1]}'")
+                ignore.append(i+1)
+            elif x.type=="lookup":
+                x=x.value
+                ignore.append(i+1)
+                if tokens[i+1].value!="=":error("Illegal operation on a lookup token was performed")
+                if x[0] not in symbol_table:error(f"Undefined object reference found '{x[0]}'")
+                if symbol_table[x[0]][0] == type([]):
+                    if get_type_from_str(get_type_from_literal(x[1]))!=type(1.0):error(f"Invalid type assignment to array {x[0]}")
+                    arg_res=get_arg_tokens(tokens[i+2:],i+1,onchar=[True,";"])
+                    ignore+=arg_res[1]
+                    if eval_out_type(arg_res[0],symbol_table[x[0]][1]):
+                        pass
+                    else:
+                        error(f"Invalid type assignment to variable {x.value}")
+                elif symbol_table[x[0]][0] == type({}):
+                    if get_type_from_str(get_type_from_literal(x[1]))!=symbol_table[x[0]][1]:error(f"Invalid type assignment to dict {x[0]}")
+                    arg_res=get_arg_tokens(tokens[i+2:],i+1,onchar=[True,";"])
+                    ignore+=arg_res[1]
+                    if eval_out_type(arg_res[0],symbol_table[x[0]][2]):
+                        pass
+                    else:
+                        error(f"Invalid type assignment to variable {x.value}")
+                else:
+                    error("Invalid lookup performed on something that is not a list or a dict")
+            elif x.value=="if":
+                arg_res=get_arg_tokens(tokens[i+1:],i,wrapper=[True,"("])
+                condition_tokens=arg_res[0]
+                if not eval_out_type(arg_res[0],type(True)):error("A bool type value is expected for conditions in IF statements")
+                ignore+=arg_res[1]
+                arg_res=get_arg_tokens(tokens[ignore[-1]+1:],ignore[-1],wrapper=[True,"{"])
+                ignore+=arg_res[1]
+                jit(arg_res[0],depth=True)
+                symbol_table["if_i"]+=1
+                symbol_table["if_s"][symbol_table["if_i"]]={"condition":condition_tokens,"code":arg_res[0]}
+            elif x.value=="while":
+                if tokens[i+1].value!="{":error("Invalid syntax found while defining a while loop")
+                arg_res=get_arg_tokens(tokens[i+1:],i,wrapper=[True,"{"])
+                jit(arg_res[0],depth=True,inloop=True)
+                symbol_table["whiles_i"]+=1
+                symbol_table["whiles_"][symbol_table["whiles_i"]]=arg_res[0]
+                ignore+=arg_res[1]
+            elif x.value=="break":
+                if not inloop:error("Break statements cannot be used outside loops")
+            elif x.type=="call":
+                if x.value not in symbol_table["funcs_"]:error(f"Function {x.value} is undefined")
+            elif x.value=="function":
+                if not valid_var_name(tokens[i+1].value):error(f"Invalid function name {tokens[i+1].value}")
+                if tokens[i+1].value in symbol_table["funcs_"]:error(f"Function {tokens[1+1].value} has been predefined")
+                arg_res=get_arg_tokens(tokens[i+2:],i+1,wrapper=[True,"{"])
+                ignore+=arg_res[1]
+                jit(arg_res[0],depth=True,infunc=True)
+                symbol_table["funcs_"][tokens[i+1].value]=arg_res[0]
+                ignore.append(i+1)
+            else:
+                error(f"Token {x} was not ignored")
+    return symbol_table
+
+def args2expr(arg_tokens):
+    expr=""
+    for x in arg_tokens:
+        if x.value in ["true","false"]:
+            if x.value=="true":
+                expr+=" True "
+            else:
+                expr+=" False "
+        elif x.type in ["num","str"]:
+            expr+=f" {x.value} "
+        elif x.type=="operator":
+            if x.value in no_space_operators:
+                expr+=x.value
+            else:
+                expr+=f" {x.value} "
+        elif x.type=="nested_var":
+            try:
+                expr+=f' {x.value} '
+            except:
+                return False
+        elif x.type=="lookup":
+            x=x.value
+            if symbol_table[x[0]][0]==type([]):
+                expr+=f" {x[0]}[{x[1]}] "
+            elif symbol_table[x[0]][0]==type({}):
+                if symbol_table[x[0]][1]==type(1.0):
+                    expr+=f" {x[0]}[{x[1]}] "
+                elif symbol_table[x[0]][1]==type(""):
+                    expr+=f" {x[0]}['{x[1]}'] "
+        elif x.type=="var":
+            expr+=f" {x.value} "
+        elif "bracket" in x.type:
+            expr+=f" {x.value} "
+    return expr
+
+def compiler(tokens,jit,depth=False):
+    global compiled,indents,if_s
+    if not depth:
+        compiled="fees_=0.0\n"
+        indents=0
+        if_s=-1
+        whiles_s=-1
+    def add_compile(data):
+        global compiled
+        compiled+="    "*indents+data+"\n"
+    i=-1
+    ignore=[]
+    for x in tokens:
+        i+=1
+        if x.value!=";" and i not in ignore:
+            if x.type=="sys" and x.value in var_init_normal:
+                add_compile(f"globals()['{tokens[i+1].value}']={get_type_defaults(get_type_from_str(x.value))}")
+                add_compile("fees_+=1")
+                ignore.append(i+1)
+            elif x.type=="var" and tokens[i+1].value=="=":
+                ignore.append(i+1)
+                arg_res=get_arg_tokens(tokens[i+2:],i+1,onchar=[True,";"])
+                add_compile(f"fees_+={len(arg_res[0])}")
+                ignore+=arg_res[1]
+                add_compile(f"globals()['{x.value}']={args2expr(arg_res[0])}")
+            elif x.type=="arr_init":
+                add_compile(f"globals()['{tokens[i+1].value}']=[]")
+                add_compile("fees_+=3")
+                ignore.append(i+1)
             elif x.type=="dict_init":
                 add_compile(f"globals()['{tokens[i+1].value}']="+"{}")
+                add_compile("fees_+=1")
                 ignore.append(i+1)
-            elif x.type=="dict_call":
-                expr=""
+            elif x.value=="struct":
+                add_compile(f"class {tokens[i+1].value}:")
+                indents+=1
+                add_compile("def __init__(self):")
+                indents+=1
+                arg_res=get_arg_tokens(tokens[i+2:],i+1,wrapper=[True,"{"])
+                ignore+=arg_res[1]
+                class_vars=vars(jit[tokens[i+1].value]())
+                ignore.append(i+1)
                 ignorei=i+1
-                for tk in tokens[i+2:]:
-                    if tk.value==";":
-                        break
+                for x in class_vars:
                     ignorei+=1
                     ignore.append(ignorei)
-                    expr+=(tk.value+" ")
-                ignore.append(i+1)
-                add_compile(f"{x.value}={expr}")
-            elif x.type=="exec":
+                    if class_vars[x]=="":
+                        add_compile(f"self.{x}=''")
+                    if class_vars[x]==1.0:
+                        add_compile(f"self.{x}={1.0}")
+                add_compile(f"fees_+={len(class_vars.keys())}")
+                indents-=2
+            elif x.type=="call":
                 add_compile(f"{x.value}()")
-    cc_compiled=compiled
+                add_compile(f"fees_+={3}")
+            elif x.value=="spawn":
+                add_compile(f"globals()['{tokens[i+1].value[1]}']={tokens[i+1].value[0]}()")
+                add_compile(f"fees_+={3}")
+                ignore.append(i+1)
+            elif x.type=="nested_var":
+                ignore.append(i+1)
+                arg_res=get_arg_tokens(tokens[i+2:],i+1,onchar=[True,";"])
+                add_compile(f"fees_+={len(arg_res[0])}")
+                ignore+=arg_res[1]
+                add_compile(f"globals()['{x.value}']={args2expr(arg_res[0])}")
+            elif x.type=="lookup":
+                ignore.append(i+1)
+                x=x.value
+                arg_res=get_arg_tokens(tokens[i+2:],i+1,onchar=[True,";"])
+                add_compile(f"fees_+={len(arg_res[0])}")
+                ignore+=arg_res[1]
+                if symbol_table[x[0]][0] == type([]):
+                    add_compile(f"globals()['{x[0]}'][{x[1]}]={args2expr(arg_res[0])}")
+                elif symbol_table[x[0]][0] == type({}):
+                    add_compile(f"globals()['{x[0]}'][{x[1]}]={args2expr(arg_res[0])}")
+            elif x.value=="break":
+                add_compile(f"fees_+=1")
+                add_compile("break")
+            elif x.value=="if":
+                if_s+=1
+                ignore.append(i+1)
+                c_if=jit['if_s'][if_s]
+                ignorei=i+1
+                for x in c_if['condition']:ignorei+=1;ignore.append(ignorei)
+                ignorei+=1;ignore.append(ignorei);ignorei+=1;ignore.append(ignorei)
+                for x in c_if['code']:ignorei+=1;ignore.append(ignorei)
+                ignorei+=1;ignore.append(ignorei)
+                add_compile(f"fees_+={len(c_if['condition'])}")
+                add_compile(f"if {args2expr(c_if['condition'])}:")
+                indents+=1
+                add_compile(f"fees_+={len(c_if['code'])}")
+                compiler(c_if['code'],jit,depth=True)
+                indents-=1
+            elif x.value=="while":
+                whiles_s+=1
+                c_while=jit['whiles_'][whiles_s]
+                ignore.append(i+1)
+                ignorei=i+1
+                for x in c_while:ignorei+=1;ignore.append(ignorei)
+                ignorei+=1;ignore.append(ignorei)
+                add_compile("while True:")
+                indents+=1
+                add_compile(f"fees_+=2")
+                compiler(c_while,jit,depth=True)
+                indents-=1
+            elif x.value=="function":
+                ignore.append(i+1)
+                ignore.append(i+2)
+                c_func=symbol_table["funcs_"][tokens[i+1].value]
+                ignorei=i+2
+                for x in c_func:ignorei+=1;ignore.append(ignorei)
+                ignore.append(ignorei+1)
+                add_compile(f"def {tokens[i+1].value}():")
+                indents+=1
+                add_compile(f"fees_+=1")
+                compiler(c_func,jit,depth=True)
+                indents-=1
+                add_compile(f"globals()['{tokens[i+1].value}']={tokens[i+1].value}")
+            else:
+                error(f"Token {x} was not ignored while compiling")
     if not depth:
-        indents,func_i,if_i=0,0,0
-        compiled=""
-        return cc_compiled,sum([x.fees for x in tokens])
-    return cc_compiled
+        return compiled
 
-def run(script,debug=True):
-    global symbol_table,if_s,if_i,funcs,compiled
-    symbol_table={"txcurr":(type(""),None),"txamount":(type(1.0),None),"txsender":(type(""),None),"txmsg":(type(""),None),"txto":(type(""),None)}
-    if_s={}
-    funcs={}
-    if_i=0
-    compiled=""
-    script=script.replace(";",";;")
+def run(script):
     try:
-        tokenz=tokeniser(script)
-        trip=jit(tokenz)
-        return compiler(tokenz,trip)
+        tk=tokeniser(script)
+        jitst=jit(tokeniser(script))
+        return compiler(tk,jitst)
     except:
-        if debug:
-            import traceback
-            traceback.print_exc()
-        return False,False
+        import traceback
+        traceback.print_exc()
+        return False

@@ -5,16 +5,37 @@ The engine which compiles vitality is called Vengine (Vitality Engine).
 ```python
 import vengine
 code=vengine.run("""
-int x;
+num x;
 """)
-print(code[0],"\nFees:",code[1])
+print(code)
 ```
 ## Basics
 To create a variable and assign a value to it
 ```python
-int x;
+num x;
 str y;
-float z;
+```
+To create a class
+```python
+struct name {
+    type : varname,
+    type : varname,
+};
+```
+Example
+```py
+struct test {
+    num : a,
+    str : b,
+};
+```
+How to spawn an object
+```python
+spawn class[varname];
+```
+Example
+```python
+spawn test[x];
 ```
 To change a variable's value.
 ```c
@@ -29,11 +50,12 @@ When a smart contract is invoked, 4 variables are injected into the code.
 2. txamount (Amount sent to contract)
 3. txmsg (Data provided along with transaction)
 4. txcurr (Currency of transaction)
+5. txto (Send a tx from the transaction to this address)
 ```
 To create an array
 ```c
 # Syntax (type)[{length<=256}] (var_name);
-int[1] alu;
+num[] alu;
 ```
 To assign a value at index of an array
 ```c
@@ -43,14 +65,23 @@ Lookup Method
 ```c
 x=alu[0];
 ```
+Nested lookup for objects
+```c
+object.var;
+```
+Example
+```c
+1. test.x=1;
+2. y=test.x+7;
+```
 To create a dictionary
 ```c
 # Syntax (key_type){}(value_type) (var_name);
-str{}int book;
+str{}num book;
 ```
 To assign a value in a dictionary
 ```c
-book{'page 1'}=1;
+book['page 1']=1;
 ```
 Lookup Method
 ```c
@@ -63,7 +94,7 @@ function (function name) {(function_code)};
 Example
 ```python
 function main {
-    int x;
+    num x;
 };
 ```
 To execute Functions;
@@ -72,11 +103,32 @@ func_name();
 ```
 If Statements
 ```c
-if (condition) (code)
+if (condition) {code};
 ```
 Example
 ```c
 if (1==1) {
-int pew;
+    num pew;
 }
+```
+
+## Sending a Transaction
+To send a transaction we can change the 'txto' env variable's value to a non empty string. After the execution the amount in the 'txamount' variable and the currency inside the 'txcurr' variable will be used to send money to the address in 'txto' variable.
+```python
+if (txamount > 1) {
+    txto=txsender;
+    txamount=1.0;
+};
+```
+# Examples
+1. Domain based tx forwarding
+```python
+str{}str domains;
+if (txmsg not in domains) {
+    domains{txsender}=txmsg;
+    txto='';
+};
+if (tsmsg in domains) {
+    txto=domains{txsender};
+};
 ```
