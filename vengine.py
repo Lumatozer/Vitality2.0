@@ -5,6 +5,7 @@ def valid_var_name(name):
     if len(name)<1:
         return False
     if name in reserved:return False
+    if name in ["vars"]:return False
     whitelist="abcdefghijklmnopqrstuvwxyz"
     for x in name:
         if x not in whitelist:
@@ -98,7 +99,10 @@ def cache_handler():
                         state="dict_init"
                         cache=[cache.split("{}")[0],cache.split("{}")[1]]
         if state=="var":
-            if cache[-1:]=="]" and len(cache.split("["))==2 and len(cache.split("]"))==2 and get_type_from_literal(cache.split("[")[1].split("]")[0])!=None:
+            if cache=="vars":
+                state="vars"
+                cache="locals()|globals()"
+            elif cache[-1:]=="]" and len(cache.split("["))==2 and len(cache.split("]"))==2 and get_type_from_literal(cache.split("[")[1].split("]")[0])!=None:
                 state="lookup"
                 cache=[cache.split("[")[0],cache.split("[")[1].split("]")[0]]
             elif cache[-2:]=="()":
@@ -234,9 +238,11 @@ def eval_out_type(tokens,expected):
             expr+=f" {get_type_defaults(symbol_table[x.value][0])} "
         elif "bracket" in x.type:
             expr+=f" {x.value} "
+        elif "vars"==x.type:
+            expr+=" {} "
         else:
             return False
-    return type(eval(expr,{'__builtins__':""},{'__builtins__':""}))==expected
+    return type(eval(expr,{'__builtins__': {}}, {}))==expected
 
 def jit(tokens,depth=False,infunc=False,inloop=False):
     global symbol_table
@@ -396,6 +402,8 @@ def args2expr(arg_tokens):
         elif x.type=="var":
             expr+=f" {x.value} "
         elif "bracket" in x.type:
+            expr+=f" {x.value} "
+        elif x.type=="vars":
             expr+=f" {x.value} "
     return expr
 
