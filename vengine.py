@@ -47,8 +47,8 @@ def get_type_from_str(typestr):
 def get_type_defaults(ttype,raw=False):
     if ttype==type(1.0):
         if raw:
-            return 1.0
-        return "1.0"
+            return 0.0
+        return "0.0"
     if ttype==type(""):
         if raw:
             return ""
@@ -212,7 +212,7 @@ def eval_out_type(tokens,expected):
         elif x.type=="str":
             expr+=" '' "
         elif x.type=="num":
-            expr+=" 1.0 "
+            expr+=" 0.0 "
         elif x.type=="operator":
             if x.value in no_space_operators:
                 expr+=x.value
@@ -456,7 +456,7 @@ def compiler(tokens,jit,depth=False):
                     if class_vars[x]=="":
                         add_compile(f"self.{x}=''")
                     if class_vars[x]==1.0:
-                        add_compile(f"self.{x}={1.0}")
+                        add_compile(f"self.{x}={0.0}")
                 add_compile(f"fees_+={len(class_vars.keys())}")
                 indents-=2
             elif x.type=="call":
